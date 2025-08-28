@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "C:\\ProgrammingUtils\\OpenGL\\includes",
+                "C:\\ProgrammingUtils\\OpenGL\\lib",
+                "C:\\ProgrammingUtils\\cglm-master\\include\\cglm"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+            ],
+            "windowsSdkVersion": "10.0.26100.0",
+            "compilerPath": "C:\\ProgrammingUtils\\mingw64\\bin\\gcc.exe",
+            "cStandard": "c23",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-x64"
+        }
+    ],
+    "version": 4
+}
