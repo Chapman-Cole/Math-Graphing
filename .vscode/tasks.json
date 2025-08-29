@@ -2,8 +2,26 @@
     "tasks": [
         {
             "type": "cppbuild",
+            "label": "C/C++: gcc.exe build fast",
+            "command": "C:\\ProgrammingUtils\\mingw64\\bin\\gcc.exe",
+            "args": [
+                "main.c",
+                "-l",
+                "C:\\ProgrammingUtils\\OpenGL\\lib\\glfw3.lib",
+                "-o",
+                "main"
+            ],
+            "options": {
+                "cwd": "${fileDirname}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "type": "cppbuild",
             "label": "C/C++: gcc.exe build active file",
-            "command": "C:\\mingw64\\bin\\gcc.exe",
+            "command": "C:\\ProgrammingUtils\\mingw64\\bin\\gcc.exe",
             "args": [
                 "-fdiagnostics-color=always",
                 "-g",

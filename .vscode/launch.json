@@ -5,7 +5,8 @@
             "type": "cppdbg",
             "request":"launch",
             "program":"${fileDirname}\\${fileBasenameNoExtension}.exe",
-            "cwd": "${fileDirname}"
+            "cwd": "${fileDirname}",
+            "preLaunchTask": "C/C++: gcc.exe build fast"
         },
         {
             "name": "C/C++: gcc.exe build and debug active file",
