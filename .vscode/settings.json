@@ -4,6 +4,7 @@
         "glfw3.h": "c",
         "glad.h": "c",
         "stdbool.h": "c",
-        "stdlib.h": "c"
+        "stdlib.h": "c",
+        "string.h": "c"
     }
 }

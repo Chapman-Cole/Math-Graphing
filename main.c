@@ -2,13 +2,11 @@
 #include "glad/glad.h"
 #include "GLFW/glfw3.h"
 #include <stdlib.h>
-
-#define true 1
-#define false 0
+#include <stdbool.h>
 
 //Note: gdi32.lib is a dependency of glfw, so you have to remember to link against it when using opengl
 //This goes for either the libglfw3.a or glfw3.lib files (the former being compiled with mingw and the latter being compiled with visual studio)
-//gcc main.c C:\ProgrammingUtils\OpenGL\lib\glad.c -I"C:\ProgrammingUtils\OpenGL\includes" -LC:\ProgrammingUtils\OpenGL\lib -l:libglfw3.a -lgdi32 -o main
+//gcc main.c "C:\ProgrammingUtils\OpenGL\lib\glad.c" -I"C:\ProgrammingUtils\OpenGL\includes" -L"C:\ProgrammingUtils\OpenGL\lib" -l:libglfw3.a -lgdi32 -o main
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 
