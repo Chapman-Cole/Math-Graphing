@@ -4,9 +4,19 @@
 #include <stdbool.h>
 
 //Determines the max length of the command that could be output to gcc
-#define MAX_COMMAND_LEN 3000
+#define MAX_COMMAND_LEN 4500
 //Determines the maximum number of elements per line
 #define SRC_INDICES_LEN 100
+
+typedef struct BuildInfo {
+    char** srcFiles;
+    char** includeFolders;
+    char** libFolders;
+    char** libs;
+    char** args;
+    char** out;
+    char** compiler;
+} BuildInfo;
 
 //Compile an executable named build with the command below:
 // gcc buildsys.c -o build
@@ -15,7 +25,7 @@
 
 //For profile, the user can specify a named profile if they want, and if they don't profile can be NULL, telling
 //the function to simply look for the first profile it finds
-void getBuildInfo(char* profile, char* file, char*** srcFiles, char*** includeFolders, char*** libFolders, char*** libs, char*** args, char** out);
+void getBuildInfo(char* profile, char* file, BuildInfo* build_info);
 
 bool strFindReplace(char** src, char* find, char* replace);
 
@@ -24,261 +34,161 @@ void prepFileString(char** str);
 // The offset is for if you want to see if there is another index of the find string after the first had been found
 int getIndexOf(char* src, char* find, int offset);
 
-void getLineInfo(char*** twoDArray, char* identifier, char* file, int offset);
+int getLineInfo(char*** twoDArray, char* identifier, char* file, int offset);
 
-int main(void) {
+int main(int argc, char* argv[]) {
     char* fstring = NULL;
     prepFileString(&fstring);
 
-    char** includeFolders = NULL;
-    char** libFolders = NULL;
-    char** libs = NULL;
-    char** srcFiles = NULL;
-    char** arguments = NULL;
-    char* out = NULL;
+    BuildInfo build_info;
+    build_info.srcFiles = NULL;
+    build_info.includeFolders = NULL;
+    build_info.libFolders = NULL;
+    build_info.libs = NULL;
+    build_info.out = NULL;
+    build_info.compiler = NULL;
+    build_info.args = NULL;
 
-    getBuildInfo(NULL, fstring, &srcFiles, &includeFolders, &libFolders, &libs, &arguments, &out);
+    if (argc > 1) {
+        getBuildInfo(argv[1], fstring, &build_info);
+    } else {
+        getBuildInfo(NULL, fstring, &build_info);
+    }
     free(fstring);
 
-    printf("Source Files:\n");
-    for (int i = 0; srcFiles[i] != NULL; i++) {
-        printf("%s\n", srcFiles[i]);
-    }
-    
-    printf("\nInclude Folders:\n");
-    for (int i = 0; i < includeFolders[i] != NULL; i++) {
-        printf("%s\n", includeFolders[i]);
+    int commandCount = 0;
+    char* command = (char*)malloc((MAX_COMMAND_LEN + 1) * sizeof(char));
+    if (command == NULL) {
+        printf("Failed to allocate memeory for command\n");
+        exit(-1);
     }
 
-    printf("\nLibrary Folders:\n");
-    for (int i = 0; i < libFolders[i] != NULL; i++) {
-        printf("%s\n", libFolders[i]);
+    //Add compiler first
+    int compiler_len = strlen(build_info.compiler[0]);
+    if (compiler_len + 1 < MAX_COMMAND_LEN) {
+        memcpy(command, build_info.compiler[0], compiler_len);
+        commandCount += compiler_len;
+        command[commandCount] = ' ';
+        commandCount++;
+    } else {
+        printf("Maximum command length exceeded.\n");
+        exit(-1);
     }
 
-    printf("\nLibraries:\n");
-    for (int i = 0; i < libs[i] != NULL; i++) {
-        printf("%s\n", libs[i]);
-    }
-
-    printf("\nArguments:\n");
-    for (int i = 0; i < arguments[i] != NULL; i++) {
-        printf("%s\n", arguments[i]);
-    }
-
-    /*
-    //This is for the headers in you program that might lie in a different folder (which you specify here)
-    const char* includeFolders[] = {
-        "C:\\ProgrammingUtils\\OpenGL\\includes"
-    };
-    int includeFoldersLen = sizeof(includeFolders)/sizeof(char*);
-
-    //This is where the you specify the folders in which those libraries live
-    const char* libFolders[] = {
-        "C:\\ProgrammingUtils\\OpenGL\\lib"
-    };
-    int libFoldersLen = sizeof(libFolders)/sizeof(char*);
-
-    //The libraries your code is linking with. Make sure to right out the full name including the file extension
-    const char* libs[] = {
-        //Note: for some reason when compiling with glfw libglfw3.a has to come before libgdi32.a
-        "libglfw3.a",
-        "libgdi32.a"
-    };
-    int libsLen = sizeof(libs)/sizeof(char*);
-
-    //The source files of your code (the .c files)
-    const char* srcFiles[] = {
-        "main.c",
-        "C:\\ProgrammingUtils\\OpenGL\\lib\\glad.c"
-    };
-    int srcFilesLen = sizeof(srcFiles)/sizeof(char*);
-
-    //Extra arguments, such as disabling certain warnings or suppressing errors. Basically anyting that doesn't fit into the prior
-    //categories
-    const char* arguments[] = {
-    };
-    int argumentsLen = sizeof(arguments)/sizeof(char*);
-
-    int index;
-    char command[MAX_COMMAND_LEN];
-    command[0] = 'g';
-    command[1] = 'c';
-    command[2] = 'c';
-    command[3] = ' ';
-    index = 4;
-
-    //This adds the source files first
-    for (int i = 0; i < srcFilesLen; i++) {
-        int len = strlen(srcFiles[i]);
-
-        if (index < MAX_COMMAND_LEN) {
-            command[index] = '"';
-            index++;
+    //Next, add the source files
+    for (int i = 0; build_info.srcFiles[i] != NULL; i++) {
+        int src_len = strlen(build_info.srcFiles[i]);
+        if (commandCount + src_len + 1 < MAX_COMMAND_LEN) {
+            memcpy(command + commandCount, build_info.srcFiles[i], src_len);
+            commandCount += src_len;
+            command[commandCount] = ' ';
+            commandCount++;
         } else {
-            printf("Length of command exceeded the max character length of the buffer\n");
-            return -1;
+            printf("Maximum command length exceeded.\n");
+            exit(-1);            
         }
+    }
 
-        for (int j = 0; j < len; j ++) {
-            if (index < MAX_COMMAND_LEN) {
-                command[index] = srcFiles[i][j];
-                index++;
+    //Next, add include Folders, if they exist
+    if (build_info.includeFolders != NULL) {
+        char* includeArg = "-I";
+        int includeArgLen = strlen(includeArg);
+
+        for (int i = 0; build_info.includeFolders[i] != NULL; i++) {
+            int includeFolderLen = strlen(build_info.includeFolders[i]);
+            if (commandCount + includeFolderLen + 1 + includeArgLen < MAX_COMMAND_LEN) {
+                memcpy(command + commandCount, includeArg, includeArgLen);
+                commandCount += includeArgLen;
+
+                memcpy(command + commandCount, build_info.includeFolders[i], includeFolderLen);
+                commandCount += includeFolderLen;
+
+                command[commandCount] = ' ';
+                commandCount++;
             } else {
-                printf("Length of command exceeded the max character length of the buffer\n");
-                return -1;
+                printf("Maximum command length exceeded.\n");
+                exit(-1);
             }
         }
-
-        //This handles the space between successive arguments
-        if (index+1 < MAX_COMMAND_LEN) {
-            command[index] = '"';
-            command[index+1] = ' ';
-            index = index + 2;
-        } else {
-            printf("Length of command exceeded the max character length of the buffer\n");
-            return -1;
-        }
     }
 
-    //This adds the include folders next
-    for (int i = 0; i < includeFoldersLen; i++) {
-        int len = strlen(includeFolders[i]);
+    //Next, add the lib folders, if they exist
+    if (build_info.libFolders != NULL) {
+        char* libFolderArg = "-L";
+        int libFolderArgLen = strlen(libFolderArg);
 
-        if (index + 2 < MAX_COMMAND_LEN) {
-            command[index] = '-';
-            command[index+1] = 'I';
-            command[index+2] = '"';
-            index = index + 3;
-        } else {
-            printf("Length of command exceeded the max character length of the buffer\n");
-            return -1;
-        }
+        for (int i = 0; build_info.libFolders[i] != NULL; i++) {
+            int libFolderLen = strlen(build_info.libFolders[i]);
+            if (commandCount + libFolderLen + 1 + libFolderArgLen < MAX_COMMAND_LEN) {
+                memcpy(command + commandCount, libFolderArg, libFolderArgLen);
+                commandCount += libFolderArgLen;
 
-        for (int j = 0; j < len; j++) {
-            if (index < MAX_COMMAND_LEN) {
-                command[index] = includeFolders[i][j];
-                index++;
+                memcpy(command + commandCount, build_info.libFolders[i], libFolderLen);
+                commandCount += libFolderLen;
+
+                command[commandCount] = ' ';
+                commandCount++;
             } else {
-                printf("Length of command exceeded the max character length of the buffer\n");
-                return -1;
-            } 
-        }
-
-        //This handles the space between successive arguments
-        if (index+1 < MAX_COMMAND_LEN) {
-            command[index] = '"';
-            command[index+1] = ' ';
-            index = index + 2;
-        } else {
-            printf("Length of command exceeded the max character length of the buffer\n");
-            return -1;
+                printf("Maximum command length exceeded.\n");
+                exit(-1);
+            }
         }
     }
 
-    //This adds the lib folders next
-    for (int i = 0; i < libFoldersLen; i++) {
-        int len = strlen(libFolders[i]);
+    //Next, add the libraries, if they exist
+    if (build_info.libs != NULL) {
+        char* libArg = "-l:";
+        int libArgLen = strlen(libArg);
 
-        if (index + 2 < MAX_COMMAND_LEN) {
-            command[index] = '-';
-            command[index+1] = 'L';
-            command[index+2] = '"';
-            index = index + 3;
-        } else {
-            printf("Length of command exceeded the max character length of the buffer\n");
-            return -1;
-        }
+        for (int i = 0; build_info.libs[i] != NULL; i++) {
+            int libLen = strlen(build_info.libs[i]);
+            if (commandCount + libLen + 1 + libArgLen < MAX_COMMAND_LEN) {
+                memcpy(command + commandCount, libArg, libArgLen);
+                commandCount += libArgLen;
 
-        for (int j = 0; j < len; j++) {
-            if (index < MAX_COMMAND_LEN) {
-                command[index] = libFolders[i][j];
-                index++;
+                memcpy(command + commandCount, build_info.libs[i], libLen);
+                commandCount += libLen;
+
+                command[commandCount] = ' ';
+                commandCount++;
             } else {
-                printf("Length of command exceeded the max character length of the buffer\n");
-                return -1;
-            } 
-        }
-
-        //This handles the space between successive arguments
-        if (index+1 < MAX_COMMAND_LEN) {
-            command[index] = '"';
-            command[index+1] = ' ';
-            index = index + 2;
-        } else {
-            printf("Length of command exceeded the max character length of the buffer\n");
-            return -1;
+                printf("Maximum command length exceeded.\n");
+                exit(-1);
+            }
         }
     }
 
-    //This adds the libs next
-    for (int i = 0; i < libsLen; i++) {
-        int len = strlen(libs[i]);
-
-        if (index+2 < MAX_COMMAND_LEN) {
-            command[index] = '-';
-            command[index+1] = 'l';
-            command[index+2] = ':';
-            index = index + 3;
-        } else {
-            printf("Length of command exceeded the max character length of the buffer\n");
-            return -1;
-        }
-
-        for (int j = 0; j < len; j++) {
-            if (index < MAX_COMMAND_LEN) {
-                command[index] = libs[i][j];
-                index++;
+    //Next, add the arguments, if they exist
+    if (build_info.args != NULL) {
+        for (int i = 0; build_info.args[i] != NULL; i++) {
+            int argsLen = strlen(build_info.args[i]);
+            if (commandCount + argsLen + 1 < MAX_COMMAND_LEN) {
+                memcpy(command + commandCount, build_info.args[i], argsLen);
+                commandCount += argsLen;
+                command[commandCount] = ' ';
+                commandCount++;
             } else {
-                printf("Length of command exceeded the max character length of the buffer\n");
-                return -1;
-            } 
-        }
-
-        //This handles the space between successive arguments
-        if (index < MAX_COMMAND_LEN) {
-            command[index] = ' ';
-            index++;
-        } else {
-            printf("Length of command exceeded the max character length of the buffer\n");
-            return -1;
+                printf("Maximum command length exceeded.\n");
+                exit(-1);
+            }
         }
     }
 
-    //This adds the extra arguments
-    for (int i = 0; i < argumentsLen; i++) {
-        int len = strlen(arguments[i]);
-        for (int j = 0; j < len; j++) {
-            if (index < MAX_COMMAND_LEN) {
-                command[index] = arguments[i][j];
-                index++;
-            } else {
-                printf("Length of command exceeded the max character length of the buffer\n");
-                return -1;
-            } 
-        }
-
-        //This handles the space between successive arguments
-        if (index < MAX_COMMAND_LEN) {
-            command[index] = ' ';
-            index++;
-        } else {
-            printf("Length of command exceeded the max character length of the buffer\n");
-            return -1;
-        }
+    //Finally, add the output file
+    char* outputArg = "-o ";
+    int outputArgLen = strlen(outputArg);
+    int outLen = strlen(build_info.out[0]);
+    if (commandCount + outputArgLen + outLen + 1 < MAX_COMMAND_LEN) {
+        memcpy(command + commandCount, outputArg, outputArgLen);
+        commandCount += outputArgLen;
+        memcpy(command + commandCount, build_info.out[0], outLen);
+        commandCount += outLen;
+        command[commandCount] = '\0';
     }
 
-    //Add the null terminator
-    if (index < MAX_COMMAND_LEN) {
-        command[index] = '\0';
-        index++;
-    } else {
-        printf("Length of command exceeded the max character length of the buffer\n");
-        return -1;
-    }
-
-    printf("%s\n\n", command);
+    printf("%s\n", command);
     system(command);
-    */
+
     return 0;
 }
 
@@ -341,15 +251,49 @@ int getIndexOf(char* src, char* find, int offset) {
 //    args = -Werror
 //    out = main
 //}
-void getBuildInfo(char* profile, char* file, char*** srcFiles, char*** includeFolders, char*** libFolders, char*** libs, char*** args, char** out) {
+void getBuildInfo(char* profile, char* file, BuildInfo* build_info) {
+    int offset;
     if (profile == NULL) {
-        getLineInfo(srcFiles, "src=", file, 0);
-        getLineInfo(includeFolders, "include=", file, 0);
-        getLineInfo(libFolders, "libFolder=", file, 0);
-        getLineInfo(libs, "libs=", file, 0);
-        getLineInfo(args, "args=", file, 0);
+        offset = 0;
     } else {
+        char* str1 = "profile:";
+        int str1Len = strlen(str1);
+        int profileLen = strlen(profile);
 
+        char* profileSearch = (char*)malloc((str1Len + profileLen + 4) * sizeof(char));
+        if (profileSearch == NULL) {
+            printf("Failed to allocate memory for profileSearch variable\n");
+            exit(-1);
+        }
+        memcpy(profileSearch, str1, str1Len);
+        memcpy(profileSearch + str1Len, profile, profileLen);
+        profileSearch[str1Len + profileLen] = '=';
+        profileSearch[str1Len + profileLen + 1] = '{';
+        profileSearch[str1Len + profileLen + 2] = '\0';
+
+        offset = getIndexOf(file, profileSearch, 0);
+        if (offset == -1) {
+            printf("Could not find profile named %s. Check spelling to verify what was typed into the command line.\n", profile);
+            exit(-1);
+        }
+        free(profileSearch);
+    }
+
+    if (getLineInfo(&build_info->srcFiles, "src=", file, offset) == -1) {
+        printf("Failed to find any source files. Please include 'src=' with at least one file specified.\n");
+        exit(-1);
+    }
+    getLineInfo(&build_info->includeFolders, "include=", file, offset);
+    getLineInfo(&build_info->libFolders, "libFolder=", file, offset);
+    getLineInfo(&build_info->libs, "libs=", file, offset);
+    getLineInfo(&build_info->args, "args=", file, offset);
+    if (getLineInfo(&build_info->compiler, "compiler=", file, offset) == -1) {
+        printf("Failed to find any compiler. Please specify compiler path with 'compiler='.\n");
+        exit(-1);
+    }
+    if (getLineInfo(&build_info->out, "out=", file, offset)) {
+        printf("Failed to find any output file destination. Please specify output file with 'out='.\n");
+        exit(-1);
     }
 }
 
@@ -408,7 +352,7 @@ bool strFindReplace(char** src, char* find, char* replace) {
     return false;
 }
 
-void getLineInfo(char*** twoDArray, char* identifier, char* file, int offset) {
+int getLineInfo(char*** twoDArray, char* identifier, char* file, int offset) {
     int identifierLen = strlen(identifier);
 
     int closedCurlyIndex = getIndexOf(file, "}", offset);
@@ -419,15 +363,17 @@ void getLineInfo(char*** twoDArray, char* identifier, char* file, int offset) {
 
     int srcFileIndex = getIndexOf(file, identifier, offset);
     if (srcFileIndex == -1) {
-        printf("Failed to find src files. Make sure that your profile includes 'src=main.c,file2.c' and so on depending on the number of source files\n");
-        exit(-1);
+        //This will be used specifically to ensure that certain key elements are included, such as specifying files to be compiled
+        return -1;
+    } else if (srcFileIndex > closedCurlyIndex) {
+        return -1;
     }
     int srcCount = 0;
     int srcIndices[SRC_INDICES_LEN];
     for (int i = srcFileIndex+identifierLen; i < closedCurlyIndex + 1; i++) {
         if (file[i] == ',' || file[i] == '\n' || file[i] == '}') {
             if (srcCount >= SRC_INDICES_LEN) {
-                printf("Program is unable to handle more than %d source files in one compilation.\n", SRC_INDICES_LEN);
+                printf("Program is unable to handle more than %d elements in one compilation.\n", SRC_INDICES_LEN);
                 exit(-1);
             }
             srcIndices[srcCount] = i;
@@ -440,7 +386,7 @@ void getLineInfo(char*** twoDArray, char* identifier, char* file, int offset) {
         }
     }
     if (srcCount == 0) {
-        printf("Found 'src=', but no files were specified. Please enter at least one source file to be compiled.\n");
+        printf("Found '%s', but no files or paths were specified. Please enter at least one file or path to be compiled.\n", identifier);
         exit(-1);
     }
     *twoDArray = (char**)malloc((srcCount+1) * sizeof(char*));
@@ -474,4 +420,6 @@ void getLineInfo(char*** twoDArray, char* identifier, char* file, int offset) {
             (*twoDArray)[i][strLen] = '\0';
         }
     }
+
+    return 0;
 }

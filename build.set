@@ -5,4 +5,17 @@ profile : m1 = {
     libs = libglfw3.a, libgdi32.a
     args = -Werror
     out = main
+    compiler = gcc
+}
+
+profile : m2 = {
+    src = beep.c, boop.c
+    compiler = gcc
+    out = beep
+}
+
+profile : m3 = {
+    src = file1.c, file2.c, file3.C
+    compiler = gcc
+    out = file1
 }
