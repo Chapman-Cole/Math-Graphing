@@ -12,19 +12,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 
 void processInput(GLFWwindow* window);
 
-const char *vertexShaderSource = "#version 330 core\n"
-    "layout (location = 0) in vec3 aPos;\n"
-    "void main()\n"
-    "{\n"
-    "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
-    "}\0";
-
-const char *fragmentShaderSource = "#version 330 core\n"
-    "out vec4 FragColor;\n"
-    "void main()\n"
-    "{\n"
-    "    FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
-    "}\0"; 
+void shaderProgramCreate(unsigned int* shaderProgram, char* vertexPath, char* fragmentPath);
 
 int main(void) {
     float vertices[] = {
@@ -51,45 +39,9 @@ int main(void) {
         return -1;
     }
 
-    unsigned int vertexShader;
-    vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-    glCompileShader(vertexShader);
-
-    int success;
-    char infoLog[512];
-    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
-    if (!success) {
-        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
-        printf("ERROR::SHADER::VERTEX::COMPILATION_FAILED\n%s\n", infoLog);
-    }
-
-    unsigned int fragmentShader;
-    fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-    glCompileShader(fragmentShader);
-
-    glGetShaderiv(fragmentShader, 512, &success);
-    if (!success) {
-        glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
-        printf("ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n%s\n", infoLog);
-    }
-
     unsigned int shaderProgram;
-    shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-
-    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-    if (!success) {
-        glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
-        printf("ERROR::SHADER::PROGRAM::LINKING_FAILED\n%s\n", infoLog);
-    }
-
+    shaderProgramCreate(&shaderProgram, "vert.glsl", "frag.glsl");
     glUseProgram(shaderProgram);
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
 
     unsigned int VAO;
     glGenVertexArrays(1, &VAO);
@@ -133,4 +85,89 @@ void processInput(GLFWwindow* window) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, true);
     }
+}
+
+void shaderProgramCreate(unsigned int* shaderProgram, char* vertexPath, char* fragmentPath) {
+    FILE* fptr = fopen(vertexPath, "rb");
+    if (fptr == NULL) {
+        printf("Could not find vertex shader, was unable to open it, or the file %s does not exist.\n", vertexPath);
+        exit(-1);
+    }
+
+    fseek(fptr, 0L, SEEK_END);
+    int vertexShaderSourceLen = ftell(fptr) / sizeof(char);
+    fseek(fptr, 0L, SEEK_SET);
+    
+    char* vertexShaderSource = (char*)malloc((vertexShaderSourceLen+1) * sizeof(char));
+    if (vertexShaderSource == NULL) {
+        printf("Failed to allocate memory for vertexShaderSource.\n");
+        exit(-1);
+    }
+    fread(vertexShaderSource, sizeof(char), vertexShaderSourceLen, fptr);
+    vertexShaderSource[vertexShaderSourceLen] = '\0';
+    fclose(fptr);
+
+    //--------------------------------------------------------------------------
+
+    fptr = fopen(fragmentPath, "rb");
+    if (fptr == NULL) {
+        printf("Could not find fragment shader, was unable to open it, or the file %s does not exist.\n", fragmentPath);
+        exit(-1);
+    }
+
+    fseek(fptr, 0L, SEEK_END);
+    int fragmentShaderSourceLen = ftell(fptr) / sizeof(char);
+    fseek(fptr, 0L, SEEK_SET);
+    
+    char* fragmentShaderSource = (char*)malloc((fragmentShaderSourceLen+1) * sizeof(char));
+    if (fragmentShaderSource == NULL) {
+        printf("Failed to allocate memory for fragmentShaderSource.\n");
+        exit(-1);
+    }
+    fread(fragmentShaderSource, sizeof(char), fragmentShaderSourceLen, fptr);
+    fragmentShaderSource[fragmentShaderSourceLen] = '\0';
+    fclose(fptr);
+
+    //-------------------------------------------------------------------------------
+
+    unsigned int vertexShader;
+    vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertexShader, 1, (const char* const*)&vertexShaderSource, NULL);
+    glCompileShader(vertexShader);
+
+    int success;
+    char infoLog[512];
+    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+        printf("ERROR::SHADER::VERTEX::COMPILATION_FAILED\n%s\n", infoLog);
+    }
+
+    unsigned int fragmentShader;
+    fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, (const char* const*)&fragmentShaderSource, NULL);
+    glCompileShader(fragmentShader);
+
+    glGetShaderiv(fragmentShader, 512, &success);
+    if (!success) {
+        glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
+        printf("ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n%s\n", infoLog);
+    }
+
+    *shaderProgram = glCreateProgram();
+    glAttachShader(*shaderProgram, vertexShader);
+    glAttachShader(*shaderProgram, fragmentShader);
+    glLinkProgram(*shaderProgram);
+
+    glGetProgramiv(*shaderProgram, GL_LINK_STATUS, &success);
+    if (!success) {
+        glGetProgramInfoLog(*shaderProgram, 512, NULL, infoLog);
+        printf("ERROR::SHADER::PROGRAM::LINKING_FAILED\n%s\n", infoLog);
+    }
+
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+
+    free(vertexShaderSource);
+    free(fragmentShaderSource);
 }
