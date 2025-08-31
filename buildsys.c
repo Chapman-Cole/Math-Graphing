@@ -5,7 +5,7 @@
 
 //Determines the max length of the command that could be output to gcc
 #define MAX_COMMAND_LEN 3000
-//Determines the maximum number of source files that could be compiled
+//Determines the maximum number of elements per line
 #define SRC_INDICES_LEN 100
 
 //Compile an executable named build with the command below:
@@ -24,7 +24,7 @@ void prepFileString(char** str);
 // The offset is for if you want to see if there is another index of the find string after the first had been found
 int getIndexOf(char* src, char* find, int offset);
 
-void getLineInfo(char*** twoDArray, char* identifier, int offset);
+void getLineInfo(char*** twoDArray, char* identifier, char* file, int offset);
 
 int main(void) {
     char* fstring = NULL;
@@ -40,9 +40,31 @@ int main(void) {
     getBuildInfo(NULL, fstring, &srcFiles, &includeFolders, &libFolders, &libs, &arguments, &out);
     free(fstring);
 
+    printf("Source Files:\n");
     for (int i = 0; srcFiles[i] != NULL; i++) {
         printf("%s\n", srcFiles[i]);
     }
+    
+    printf("\nInclude Folders:\n");
+    for (int i = 0; i < includeFolders[i] != NULL; i++) {
+        printf("%s\n", includeFolders[i]);
+    }
+
+    printf("\nLibrary Folders:\n");
+    for (int i = 0; i < libFolders[i] != NULL; i++) {
+        printf("%s\n", libFolders[i]);
+    }
+
+    printf("\nLibraries:\n");
+    for (int i = 0; i < libs[i] != NULL; i++) {
+        printf("%s\n", libs[i]);
+    }
+
+    printf("\nArguments:\n");
+    for (int i = 0; i < arguments[i] != NULL; i++) {
+        printf("%s\n", arguments[i]);
+    }
+
     /*
     //This is for the headers in you program that might lie in a different folder (which you specify here)
     const char* includeFolders[] = {
@@ -321,81 +343,11 @@ int getIndexOf(char* src, char* find, int offset) {
 //}
 void getBuildInfo(char* profile, char* file, char*** srcFiles, char*** includeFolders, char*** libFolders, char*** libs, char*** args, char** out) {
     if (profile == NULL) {
-        //This will find the first instance of a profile, and knowing the name of the profile is not even necessary because
-        //if no profile is named, then the first profile defined will be used to get the information. It does this by simply
-        //looking for the first instances of each of the possible parameters
-
-        //This will be used to make sure that if there are multiple profiles, the program will never search beyond this
-        //for either the src files, includes, etc.
-        int closedCurlyIndex = getIndexOf(file, "}", 0);
-        if (closedCurlyIndex == -1) {
-            printf("Failed to find closing curly brace (}). Please make sure all profiles are enclosed by curly braces\n");
-            exit(-1);
-        }
-
-        //Find and parse the src files first
-        int srcFileIndex = getIndexOf(file, "src=", 0);
-        if (srcFileIndex == -1) {
-            printf("Failed to find src files. Make sure that your profile includes 'src=main.c,file2.c' and so on depending on the number of source files\n");
-            exit(-1);
-        }
-        int srcCount = 0;
-        int srcIndices[SRC_INDICES_LEN];
-        for (int i = srcFileIndex+4; i < closedCurlyIndex + 1; i++) {
-            if (file[i] == ',' || file[i] == '\n' || file[i] == '}') {
-                if (srcCount >= SRC_INDICES_LEN) {
-                    printf("Program is unable to handle more than %d source files in one compilation.\n", SRC_INDICES_LEN);
-                    exit(-1);
-                }
-
-                srcIndices[srcCount] = i;
-                srcCount++;
-
-                //Make sure the loop stops once a newline is reached or an ending curly brace in order to prevent it from
-                //going onto lines other the one that defines the src files
-                if (file[i] == '\n' || file[i] == '}') {
-                    break;
-                }
-            }
-        }
-        if (srcCount == 0) {
-            printf("Found 'src=', but no files were specified. Please enter at least one source file to be compiled.\n");
-            exit(-1);
-        }
-
-        *srcFiles = (char**)malloc((srcCount+1) * sizeof(char*));
-        (*srcFiles)[srcCount] = NULL;
-        if (*srcFiles == NULL) {
-            printf("Failed to allocate memory for source files 2D array. (location 1)\n");
-            exit(-1);
-        }
-
-        for (int i = 0; i < srcCount; i++) {
-            if (i == 0) {
-                int strLen = srcIndices[0] - (srcFileIndex + 4);
-                (*srcFiles)[0] = (char*)malloc((strLen + 1) * sizeof(char));
-                if ((*srcFiles)[0] == NULL) {
-                    printf("Failed to allocate memory for source files 2D array. (location 2)\n");
-                    exit(-1);
-                }
-                for (int j = srcFileIndex+4; j < srcIndices[0]; j++) {
-                    (*srcFiles)[0][j - srcFileIndex - 4] = file[j];
-                }
-                (*srcFiles)[0][strLen] = '\0';
-            } else {
-                int strLen = srcIndices[i] - (srcIndices[i-1] + 1);
-                (*srcFiles)[i] = (char*)malloc((strLen + 1) * sizeof(char));
-                if ((*srcFiles)[i] == NULL) {
-                    printf("Failed to allocate memory for source files 2D array. (location 3)\n");
-                    exit(-1);
-                }
-                for (int j = srcIndices[i-1]+1; j < srcIndices[i]; j++) {
-                    (*srcFiles)[i][j - srcIndices[i-1] -1] = file[j];
-                }
-                (*srcFiles)[i][strLen] = '\0';
-            }
-        }
-
+        getLineInfo(srcFiles, "src=", file, 0);
+        getLineInfo(includeFolders, "include=", file, 0);
+        getLineInfo(libFolders, "libFolder=", file, 0);
+        getLineInfo(libs, "libs=", file, 0);
+        getLineInfo(args, "args=", file, 0);
     } else {
 
     }
@@ -456,6 +408,70 @@ bool strFindReplace(char** src, char* find, char* replace) {
     return false;
 }
 
-void getLineInfo(char*** twoDArray, char* identifier, int offset) {
+void getLineInfo(char*** twoDArray, char* identifier, char* file, int offset) {
+    int identifierLen = strlen(identifier);
 
+    int closedCurlyIndex = getIndexOf(file, "}", offset);
+    if (closedCurlyIndex == -1) {
+        printf("Failed to find closing curly brace (}). Please make sure all profiles are enclosed by curly braces\n");
+        exit(-1);
+    }
+
+    int srcFileIndex = getIndexOf(file, identifier, offset);
+    if (srcFileIndex == -1) {
+        printf("Failed to find src files. Make sure that your profile includes 'src=main.c,file2.c' and so on depending on the number of source files\n");
+        exit(-1);
+    }
+    int srcCount = 0;
+    int srcIndices[SRC_INDICES_LEN];
+    for (int i = srcFileIndex+identifierLen; i < closedCurlyIndex + 1; i++) {
+        if (file[i] == ',' || file[i] == '\n' || file[i] == '}') {
+            if (srcCount >= SRC_INDICES_LEN) {
+                printf("Program is unable to handle more than %d source files in one compilation.\n", SRC_INDICES_LEN);
+                exit(-1);
+            }
+            srcIndices[srcCount] = i;
+            srcCount++;
+            //Make sure the loop stops once a newline is reached or an ending curly brace in order to prevent it from
+            //going onto lines other the one that defines the src files
+            if (file[i] == '\n' || file[i] == '}') {
+                break;
+            }
+        }
+    }
+    if (srcCount == 0) {
+        printf("Found 'src=', but no files were specified. Please enter at least one source file to be compiled.\n");
+        exit(-1);
+    }
+    *twoDArray = (char**)malloc((srcCount+1) * sizeof(char*));
+    (*twoDArray)[srcCount] = NULL;
+    if (*twoDArray == NULL) {
+        printf("Failed to allocate memory for source files 2D array. (location 1)\n");
+        exit(-1);
+    }
+    for (int i = 0; i < srcCount; i++) {
+        if (i == 0) {
+            int strLen = srcIndices[0] - (srcFileIndex + identifierLen);
+            (*twoDArray)[0] = (char*)malloc((strLen + 1) * sizeof(char));
+            if ((*twoDArray)[0] == NULL) {
+                printf("Failed to allocate memory for source files 2D array. (location 2)\n");
+                exit(-1);
+            }
+            for (int j = srcFileIndex+identifierLen; j < srcIndices[0]; j++) {
+                (*twoDArray)[0][j - srcFileIndex - identifierLen] = file[j];
+            }
+            (*twoDArray)[0][strLen] = '\0';
+        } else {
+            int strLen = srcIndices[i] - (srcIndices[i-1] + 1);
+            (*twoDArray)[i] = (char*)malloc((strLen + 1) * sizeof(char));
+            if ((*twoDArray)[i] == NULL) {
+                printf("Failed to allocate memory for source files 2D array. (location 3)\n");
+                exit(-1);
+            }
+            for (int j = srcIndices[i-1]+1; j < srcIndices[i]; j++) {
+                (*twoDArray)[i][j - srcIndices[i-1] -1] = file[j];
+            }
+            (*twoDArray)[i][strLen] = '\0';
+        }
+    }
 }
