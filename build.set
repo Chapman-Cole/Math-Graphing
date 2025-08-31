@@ -1,2 +1,8 @@
-This is some text to see how this works
-This is even more text to see how this works when there are multiple lines
+profile : m1 = {
+    src = main.c, glad.c
+    include = C:\Users\colec\..
+    libFolder = C:\Users\colec\..
+    libs = libglfw3.a, libgdi32.a
+    args = -Werror
+    out = main
+}

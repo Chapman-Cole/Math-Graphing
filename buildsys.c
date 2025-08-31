@@ -1,26 +1,48 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
+//Determines the max length of the command that could be output to gcc
 #define MAX_COMMAND_LEN 3000
+//Determines the maximum number of source files that could be compiled
+#define SRC_INDICES_LEN 100
 
 //Compile an executable named build with the command below:
 // gcc buildsys.c -o build
 
 //Currently the build command system only supports gcc, but cl.exe support may be added at a later date
 
-void getBuildInfo(char** profile, char** srcFiles, char** includeFolders, char** libFolders, char** libs, char** args);
+//For profile, the user can specify a named profile if they want, and if they don't profile can be NULL, telling
+//the function to simply look for the first profile it finds
+void getBuildInfo(char* profile, char* file, char*** srcFiles, char*** includeFolders, char*** libFolders, char*** libs, char*** args, char** out);
 
 bool strFindReplace(char** src, char* find, char* replace);
 
+void prepFileString(char** str);
+
+// The offset is for if you want to see if there is another index of the find string after the first had been found
+int getIndexOf(char* src, char* find, int offset);
+
+void getLineInfo(char*** twoDArray, char* identifier, int offset);
+
 int main(void) {
+    char* fstring = NULL;
+    prepFileString(&fstring);
 
-    char* profile;
-    getBuildInfo(&profile, NULL, NULL, NULL, NULL, NULL);
-    printf("%s\n\n", profile);
+    char** includeFolders = NULL;
+    char** libFolders = NULL;
+    char** libs = NULL;
+    char** srcFiles = NULL;
+    char** arguments = NULL;
+    char* out = NULL;
 
-    while(strFindReplace(&profile, "this", "thiss"));
-    printf("%s\n\n", profile);
+    getBuildInfo(NULL, fstring, &srcFiles, &includeFolders, &libFolders, &libs, &arguments, &out);
+    free(fstring);
+
+    for (int i = 0; srcFiles[i] != NULL; i++) {
+        printf("%s\n", srcFiles[i]);
+    }
     /*
     //This is for the headers in you program that might lie in a different folder (which you specify here)
     const char* includeFolders[] = {
@@ -238,14 +260,7 @@ int main(void) {
     return 0;
 }
 
-//Syntax:
-//profile=**some name**
-//src=main.c, glad.c, etc.
-//include=C:\Users\colec\..., etc.
-//libFolder=C:\Users\colec\...etc.
-//libs=libglfw3.a, libgdi32.a, etc.
-//args=-Werror, etc.
-void getBuildInfo(char** profile, char** srcFiles, char** includeFolders, char** libFolders, char** libs, char** args) {
+void prepFileString(char** str) {
     FILE* fptr = fopen("build.set", "rb");
     if (fptr == NULL) {
         printf("There was an error opening the file build.set\nMake sure that the file exists with that specific name\nand that it is in the same directory as build.exe\n");
@@ -255,17 +270,135 @@ void getBuildInfo(char** profile, char** srcFiles, char** includeFolders, char**
     int fsize = ftell(fptr) / sizeof(char);
     fseek(fptr, 0L, SEEK_SET);
 
-    char* fbuffer = (char*)malloc(fsize * sizeof(char));
+    char* fbuffer = (char*)malloc((fsize+1) * sizeof(char));
     if (fbuffer == NULL) {
         printf("Failed to allocate memory for string buffer\n");
         exit(-1);
     }
 
-    fread(fbuffer, sizeof(char), fsize + 1, fptr);
+    fread(fbuffer, sizeof(char), fsize, fptr);
     fbuffer[fsize] = '\0';
     fclose(fptr);
 
-    *profile = fbuffer;
+    //Clean up the file string by getting rid of spaces and carriage return characters
+    while(strFindReplace(&fbuffer, " ", ""));
+    while(strFindReplace(&fbuffer, "\r", ""));
+
+    *str = fbuffer;
+}
+
+int getIndexOf(char* src, char* find, int offset) {
+    int srcLen = strlen(src);
+    int findLen = strlen(find);
+
+    for (int i = offset; i < srcLen - findLen; i++) {
+        int count = 0;
+        for (int j = 0; j < findLen; j++) {
+            if (src[i + j] == find[j]) {
+                count++;
+            } else {
+                break;
+            }
+        }
+
+        if (count == findLen) {
+            return i;
+        }
+    }
+
+    //-1 indicates that the string find was not found in the src string
+    return -1;
+}
+
+//Syntax:
+//profile : m1 = {
+//    src = main.c, glad.c
+//    include = C:\Users\colec\..
+//    libFolder = C:\Users\colec\..
+//    libs = libglfw3.a, libgdi32.a
+//    args = -Werror
+//    out = main
+//}
+void getBuildInfo(char* profile, char* file, char*** srcFiles, char*** includeFolders, char*** libFolders, char*** libs, char*** args, char** out) {
+    if (profile == NULL) {
+        //This will find the first instance of a profile, and knowing the name of the profile is not even necessary because
+        //if no profile is named, then the first profile defined will be used to get the information. It does this by simply
+        //looking for the first instances of each of the possible parameters
+
+        //This will be used to make sure that if there are multiple profiles, the program will never search beyond this
+        //for either the src files, includes, etc.
+        int closedCurlyIndex = getIndexOf(file, "}", 0);
+        if (closedCurlyIndex == -1) {
+            printf("Failed to find closing curly brace (}). Please make sure all profiles are enclosed by curly braces\n");
+            exit(-1);
+        }
+
+        //Find and parse the src files first
+        int srcFileIndex = getIndexOf(file, "src=", 0);
+        if (srcFileIndex == -1) {
+            printf("Failed to find src files. Make sure that your profile includes 'src=main.c,file2.c' and so on depending on the number of source files\n");
+            exit(-1);
+        }
+        int srcCount = 0;
+        int srcIndices[SRC_INDICES_LEN];
+        for (int i = srcFileIndex+4; i < closedCurlyIndex + 1; i++) {
+            if (file[i] == ',' || file[i] == '\n' || file[i] == '}') {
+                if (srcCount >= SRC_INDICES_LEN) {
+                    printf("Program is unable to handle more than %d source files in one compilation.\n", SRC_INDICES_LEN);
+                    exit(-1);
+                }
+
+                srcIndices[srcCount] = i;
+                srcCount++;
+
+                //Make sure the loop stops once a newline is reached or an ending curly brace in order to prevent it from
+                //going onto lines other the one that defines the src files
+                if (file[i] == '\n' || file[i] == '}') {
+                    break;
+                }
+            }
+        }
+        if (srcCount == 0) {
+            printf("Found 'src=', but no files were specified. Please enter at least one source file to be compiled.\n");
+            exit(-1);
+        }
+
+        *srcFiles = (char**)malloc((srcCount+1) * sizeof(char*));
+        (*srcFiles)[srcCount] = NULL;
+        if (*srcFiles == NULL) {
+            printf("Failed to allocate memory for source files 2D array. (location 1)\n");
+            exit(-1);
+        }
+
+        for (int i = 0; i < srcCount; i++) {
+            if (i == 0) {
+                int strLen = srcIndices[0] - (srcFileIndex + 4);
+                (*srcFiles)[0] = (char*)malloc((strLen + 1) * sizeof(char));
+                if ((*srcFiles)[0] == NULL) {
+                    printf("Failed to allocate memory for source files 2D array. (location 2)\n");
+                    exit(-1);
+                }
+                for (int j = srcFileIndex+4; j < srcIndices[0]; j++) {
+                    (*srcFiles)[0][j - srcFileIndex - 4] = file[j];
+                }
+                (*srcFiles)[0][strLen] = '\0';
+            } else {
+                int strLen = srcIndices[i] - (srcIndices[i-1] + 1);
+                (*srcFiles)[i] = (char*)malloc((strLen + 1) * sizeof(char));
+                if ((*srcFiles)[i] == NULL) {
+                    printf("Failed to allocate memory for source files 2D array. (location 3)\n");
+                    exit(-1);
+                }
+                for (int j = srcIndices[i-1]+1; j < srcIndices[i]; j++) {
+                    (*srcFiles)[i][j - srcIndices[i-1] -1] = file[j];
+                }
+                (*srcFiles)[i][strLen] = '\0';
+            }
+        }
+
+    } else {
+
+    }
 }
 
 //This assumes null terminated strings
@@ -288,46 +421,41 @@ bool strFindReplace(char** src, char* find, char* replace) {
 
         if (count == findLen) {
             if (findLen == replaceLen) {
-                for (int j = 0; j < findLen; j++) {
-                    (*src)[i+j] = replace[j];
-                }
+                memcpy(*src + i, replace, replaceLen);
                 return true;
             } else if (replaceLen > findLen) {
-                char* tempstr = (char*)realloc((*src), (srcLen - findLen + replaceLen) * sizeof(char));
-                if (tempstr == NULL) {
+                (*src) = (char*)realloc((*src), (srcLen - findLen + replaceLen + 1) * sizeof(char));
+                if ((*src) == NULL) {
                     printf("Failed to allocate memory in strFindReplace\n");
                     exit(-1);
                 }
-                for (int c = 1; c <= replaceLen-findLen; c++) {
-                    char prev = (*src)[i+findLen];
-                    for (int j = i + findLen+c+1; j < srcLen; j++) {
-                        char temp = (*src)[j];
-                        (*src)[j] = prev;
-                        prev = temp;
-                    }
-                }
 
-                for (int j = 0; j < replaceLen; j++) {
-                    (*src)[i+j] = replace[j];
-                }
+                char* tempstr2 = (char*)malloc((srcLen - i - findLen + 1) * sizeof(char));
+                memcpy(tempstr2, *src + i + findLen, srcLen - i - findLen);
 
+                memcpy(*src + i, replace, replaceLen);
+                srcLen = srcLen - findLen + replaceLen;
+                memcpy(*src + i + replaceLen, tempstr2, srcLen - i - replaceLen);
+
+                free(tempstr2);
+                (*src)[srcLen] = '\0';
                 return true;
             } else if (replaceLen < findLen) {
-                for (int c = 1; c <= findLen-replaceLen; c++) {
-                    for (int j = i + replaceLen; j < srcLen-1; j++) {
-                        (*src)[j] = (*src)[j+1];
-                    }
-                }
+                char* tempstr2 = (char*)malloc((srcLen - i - findLen + 1) * sizeof(char));
+                memcpy(tempstr2, *src + i + findLen, srcLen - i - findLen);
 
-                for (int j = 0; j < replaceLen; j++) {
-                    (*src)[i+j] = replace[j];
-                }
-
-                (*src)[srcLen-findLen+replaceLen] = '\0';
+                memcpy(*src + i, replace, replaceLen);
+                memcpy(*src + i + replaceLen, tempstr2, srcLen - i - findLen);
+                free(tempstr2);
+                (*src)[srcLen - findLen + replaceLen] = '\0';
                 return true;
             }
         }
     }
 
     return false;
+}
+
+void getLineInfo(char*** twoDArray, char* identifier, int offset) {
+
 }

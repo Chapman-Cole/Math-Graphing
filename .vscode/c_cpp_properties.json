@@ -11,13 +11,15 @@
             "defines": [
                 "_DEBUG",
                 "UNICODE",
-                "_UNICODE"
+                "_UNICODE",
+                "true=1",
+                "false=0"
             ],
             "windowsSdkVersion": "10.0.26100.0",
             "compilerPath": "C:\\ProgrammingUtils\\mingw64\\bin\\gcc.exe",
             "cStandard": "c23",
             "cppStandard": "c++17",
-            "intelliSenseMode": "${default}"
+            "intelliSenseMode": "${default}",
         }
     ],
     "version": 4
